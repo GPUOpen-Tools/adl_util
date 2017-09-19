@@ -1,5 +1,5 @@
 //==============================================================================
-// Copyright (c) 2011-2016 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2011-2017 Advanced Micro Devices, Inc. All rights reserved.
 /// \author AMD Developer Tools Team
 /// \file
 /// \brief  Interface from Developer Tools to ADL.
@@ -17,7 +17,6 @@
 #include "AMDTMutex.h"
 
 #include "adl_sdk.h"
-// This is from ADL's include directory.
 
 #include <string>
 #include <vector>

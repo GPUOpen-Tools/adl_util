@@ -217,7 +217,7 @@ ADLUtil_Result AMDTADLUtils::Unload()
 
 ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
 {
-    AMDTScopeLock lock(m_asicInfoMutex);
+    std::lock_guard<std::mutex> lock(m_asicInfoMutex);
 
     if (ADL_RESULT_NONE == m_asicInfoListRetVal)
     {
@@ -247,7 +247,7 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
             {
                 if (0 < numAdapter)
                 {
-                    LPAdapterInfo lpAdapterInfo = (LPAdapterInfo)malloc(sizeof(AdapterInfo) * numAdapter);
+                    LPAdapterInfo lpAdapterInfo = reinterpret_cast<LPAdapterInfo>(malloc(sizeof(AdapterInfo) * numAdapter));
                     memset(lpAdapterInfo, '\0', sizeof(AdapterInfo) * numAdapter);
 
                     // Get the AdapterInfo structure for all adapters in the system
@@ -348,7 +348,7 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
                             m_asicInfoList.push_back(asicInfo);
                         }
 
-                        ADL_Main_Memory_Free((void**)&lpAdapterInfo);
+                        ADL_Main_Memory_Free(reinterpret_cast<void**>(&lpAdapterInfo));
                     }
                     else
                     {
@@ -365,7 +365,7 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
 
 ADLUtil_Result AMDTADLUtils::GetADLVersionsInfo(ADLVersionsInfo& adlVersionInfo)
 {
-    AMDTScopeLock lock(m_adlVersionsMutex);
+    std::lock_guard<std::mutex> lock(m_adlVersionsMutex);
 
     if (ADL_RESULT_NONE == m_versionRetVal)
     {
@@ -403,7 +403,7 @@ ADLUtil_Result AMDTADLUtils::GetADLVersionsInfo(ADLVersionsInfo& adlVersionInfo)
     return m_versionRetVal;
 }
 
-ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned int& minorVer, unsigned int& subMinorVer)
+ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned int& minorVer, unsigned int& subMinorVer) const
 {
     majorVer = 0;
     minorVer = 0;
@@ -514,7 +514,7 @@ ADLUtil_Result AMDTADLUtils::ForceGPUClock(bool forceHigh, unsigned int gpuIndex
 
     if (ADL_SUCCESS == result)
     {
-        AMDTScopeLock lock(m_powerTableMutex);
+        std::lock_guard<std::mutex> lock(m_powerTableMutex);
 
         int adlResult = ADL_OK;
 
@@ -556,7 +556,7 @@ ADLUtil_Result AMDTADLUtils::ForceGPUClock(bool forceHigh, unsigned int gpuIndex
 
                 if (0 < perfLevelSize)
                 {
-                    ADLODPerformanceLevels* odPerformanceLevels = (ADLODPerformanceLevels*)malloc(perfLevelSize);
+                    ADLODPerformanceLevels* odPerformanceLevels = reinterpret_cast<ADLODPerformanceLevels*>(malloc(perfLevelSize));
 
                     odPerformanceLevels->iSize = perfLevelSize;
 
@@ -571,7 +571,7 @@ ADLUtil_Result AMDTADLUtils::ForceGPUClock(bool forceHigh, unsigned int gpuIndex
 
                     if (ADL_OK <= adlResult)
                     {
-                        ADLODPerformanceLevels* origODPerformanceLevels = (ADLODPerformanceLevels*)malloc(perfLevelSize);
+                        ADLODPerformanceLevels* origODPerformanceLevels = reinterpret_cast<ADLODPerformanceLevels*>(malloc(perfLevelSize));
                         memcpy(origODPerformanceLevels, odPerformanceLevels, odPerformanceLevels->iSize);
                         m_origODPerformanceLevels[thisGpuIndex] = origODPerformanceLevels;
 

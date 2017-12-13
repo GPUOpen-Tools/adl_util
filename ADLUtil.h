@@ -14,7 +14,7 @@
     #endif
 #endif
 
-#include "AMDTMutex.h"
+#include <mutex>
 
 #include "adl_sdk.h"
 
@@ -28,6 +28,7 @@
     #define ADLUTIL_DEPRECATED __attribute__((deprecated))
     typedef void* ADLModule;
 #elif _WIN32
+    #include <windows.h>
     #define ADLUTIL_DEPRECATED __declspec(deprecated)
     typedef HINSTANCE ADLModule;
 #else
@@ -163,7 +164,7 @@ public:
     /// \param[out] minorVer the minor version number
     /// \param[out] subMinorVer the sub-minor version number
     /// \return an enum ADLUtil_Result status code.
-    ADLUtil_Result GetDriverVersion(unsigned int& majorVer, unsigned int& minorVer, unsigned int& subMinorVer);
+    ADLUtil_Result GetDriverVersion(unsigned int& majorVer, unsigned int& minorVer, unsigned int& subMinorVer) const;
 
     /// Updates the Power tables so that the GPU clock in all power states is set to the highest power level in the power table
     /// \param[in] gpuIndex the index of the GPU whose power table should be updated. If -1, then the power table for all GPUs will be updated
@@ -192,9 +193,9 @@ private:
 
     ADLModule          m_libHandle;          ///< Handle to ADL Module
     ADL_CONTEXT_HANDLE m_adlContext;         ///< ADL Context for use with ADL2 functions
-    AMDTMutex          m_asicInfoMutex;      ///< Mutex to protect access to the m_asicInfoList
-    AMDTMutex          m_adlVersionsMutex;   ///< Mutex to protect access to the m_adlVersionsInfo
-    AMDTMutex          m_powerTableMutex;    ///< Mutex to protect access to the overdrive power tables set by ForceGPUClock
+    std::mutex         m_asicInfoMutex;      ///< Mutex to protect access to the m_asicInfoList
+    std::mutex         m_adlVersionsMutex;   ///< Mutex to protect access to the m_adlVersionsInfo
+    std::mutex         m_powerTableMutex;    ///< Mutex to protect access to the overdrive power tables set by ForceGPUClock
     AsicInfoList       m_asicInfoList;       ///< the ADL ASIC list
     ADLVersionsInfo    m_adlVersionsInfo;    ///< the ADL Version info
 
@@ -204,8 +205,8 @@ private:
     /// typedef for a map used to save off original power table information
     typedef std::unordered_map<unsigned int, ADLODPerformanceLevels*> PowerTableMap;
 
-    PowerTableMap          m_origODPerformanceLevels; ///< map of the original power tables per GPU
-    std::unordered_set<unsigned int> m_highPowerGpuSpeedSet;    ///< set indicating whether the power tables have been changed for a given GPU index
+    PowerTableMap                       m_origODPerformanceLevels; ///< map of the original power tables per GPU
+    std::unordered_set<unsigned int>    m_highPowerGpuSpeedSet;    ///< set indicating whether the power tables have been changed for a given GPU index
 
 #define X(SYM) SYM##_fn m_##SYM; ///< ADL entry point
     ADL_INTERFACE_TABLE;

@@ -248,111 +248,119 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
                 if (0 < numAdapter)
                 {
                     LPAdapterInfo lpAdapterInfo = reinterpret_cast<LPAdapterInfo>(malloc(sizeof(AdapterInfo) * numAdapter));
-                    memset(lpAdapterInfo, '\0', sizeof(AdapterInfo) * numAdapter);
 
-                    // Get the AdapterInfo structure for all adapters in the system
-                    if (nullptr != m_ADL2_Adapter_AdapterInfo_Get)
+                    if (nullptr == lpAdapterInfo)
                     {
-                        adlResult = m_ADL2_Adapter_AdapterInfo_Get(m_adlContext, lpAdapterInfo, sizeof(AdapterInfo) * numAdapter);
+                        adlResult = ADL_GET_ADAPTER_INFO_FAILED;
                     }
                     else
                     {
-                        adlResult = m_ADL_Adapter_AdapterInfo_Get(lpAdapterInfo, sizeof(AdapterInfo) * numAdapter);
-                    }
+                        memset(lpAdapterInfo, '\0', sizeof(AdapterInfo) * numAdapter);
 
-                    if (ADL_OK == adlResult)
-                    {
-                        for (int i = 0; i < numAdapter; ++i)
+                        // Get the AdapterInfo structure for all adapters in the system
+                        if (nullptr != m_ADL2_Adapter_AdapterInfo_Get)
                         {
-                            std::string adapterName = lpAdapterInfo[i].strAdapterName;
-                            std::string adapterInfo = lpAdapterInfo[i].strUDID;
+                            adlResult = m_ADL2_Adapter_AdapterInfo_Get(m_adlContext, lpAdapterInfo, sizeof(AdapterInfo) * numAdapter);
+                        }
+                        else
+                        {
+                            adlResult = m_ADL_Adapter_AdapterInfo_Get(lpAdapterInfo, sizeof(AdapterInfo) * numAdapter);
+                        }
 
-                            // trim trailing whitespace
-                            size_t lastNonSpace = adapterName.length() - 1;
-
-                            while (adapterName[lastNonSpace] == ' ')
+                        if (ADL_OK == adlResult)
+                        {
+                            for (int i = 0; i < numAdapter; ++i)
                             {
-                                --lastNonSpace;
-                            }
+                                std::string adapterName = lpAdapterInfo[i].strAdapterName;
+                                std::string adapterInfo = lpAdapterInfo[i].strUDID;
 
-                            ADLUtil_ASICInfo asicInfo;
-                            asicInfo.adapterName = adapterName.substr(0, lastNonSpace + 1);
-                            // TODO: find a way to get the correct gpu index in the system
-                            asicInfo.gpuIndex = 0;
-#ifdef _WIN32
-                            size_t vendorIndex = adapterInfo.find("PCI_VEN_") + strlen("PCI_VEN_");
-                            size_t devIndex = adapterInfo.find("&DEV_") + strlen("&DEV_");
-                            size_t revIndex = adapterInfo.find("&REV_") + strlen("&REV_");
+                                // trim trailing whitespace
+                                size_t lastNonSpace = adapterName.length() - 1;
 
-                            if (vendorIndex != std::string::npos)
-                            {
-                                std::string vendorIDString = adapterInfo.substr(vendorIndex, 4);
-                                asicInfo.vendorID = xtoi(vendorIDString.c_str());
-                            }
-                            else
-                            {
-                                asicInfo.vendorID = 0;
-                            }
-
-                            if (devIndex != std::string::npos)
-                            {
-                                asicInfo.deviceIDString = adapterInfo.substr(devIndex, 4);
-                                asicInfo.deviceID = xtoi(asicInfo.deviceIDString.c_str());
-                            }
-                            else
-                            {
-                                asicInfo.deviceIDString.clear();
-                                asicInfo.deviceID = 0;
-                            }
-
-                            if (revIndex != std::string::npos)
-                            {
-                                std::string revIDString = adapterInfo.substr(revIndex, 2);
-                                asicInfo.revID = xtoi(revIDString.c_str());
-                            }
-                            else
-                            {
-                                asicInfo.revID = 0;
-                            }
-
-                            asicInfo.registryPath = lpAdapterInfo[i].strDriverPath;
-                            asicInfo.registryPathExt = lpAdapterInfo[i].strDriverPathExt;
-#elif defined(_LINUX)
-                            asicInfo.vendorID = lpAdapterInfo[i].iVendorID;
-                            size_t devIndex = adapterInfo.find(":") + 1;
-
-                            if (devIndex != std::string::npos)
-                            {
-                                asicInfo.deviceIDString = adapterInfo.substr(devIndex, std::string::npos);
-                                size_t colonPos = asicInfo.deviceIDString.find(":");
-
-                                if (colonPos != std::string::npos)
+                                while (adapterName[lastNonSpace] == ' ')
                                 {
-                                    asicInfo.deviceIDString = asicInfo.deviceIDString.substr(0, colonPos);
-                                    asicInfo.deviceID = atoi(asicInfo.deviceIDString.c_str());
+                                    --lastNonSpace;
+                                }
+
+                                ADLUtil_ASICInfo asicInfo;
+                                asicInfo.adapterName = adapterName.substr(0, lastNonSpace + 1);
+                                // TODO: find a way to get the correct gpu index in the system
+                                asicInfo.gpuIndex = 0;
+#ifdef _WIN32
+                                size_t vendorIndex = adapterInfo.find("PCI_VEN_") + strlen("PCI_VEN_");
+                                size_t devIndex = adapterInfo.find("&DEV_") + strlen("&DEV_");
+                                size_t revIndex = adapterInfo.find("&REV_") + strlen("&REV_");
+
+                                if (vendorIndex != std::string::npos)
+                                {
+                                    std::string vendorIDString = adapterInfo.substr(vendorIndex, 4);
+                                    asicInfo.vendorID = xtoi(vendorIDString.c_str());
+                                }
+                                else
+                                {
+                                    asicInfo.vendorID = 0;
+                                }
+
+                                if (devIndex != std::string::npos)
+                                {
+                                    asicInfo.deviceIDString = adapterInfo.substr(devIndex, 4);
+                                    asicInfo.deviceID = xtoi(asicInfo.deviceIDString.c_str());
+                                }
+                                else
+                                {
+                                    asicInfo.deviceIDString.clear();
+                                    asicInfo.deviceID = 0;
+                                }
+
+                                if (revIndex != std::string::npos)
+                                {
+                                    std::string revIDString = adapterInfo.substr(revIndex, 2);
+                                    asicInfo.revID = xtoi(revIDString.c_str());
+                                }
+                                else
+                                {
+                                    asicInfo.revID = 0;
+                                }
+
+                                asicInfo.registryPath = lpAdapterInfo[i].strDriverPath;
+                                asicInfo.registryPathExt = lpAdapterInfo[i].strDriverPathExt;
+#elif defined(_LINUX)
+                                asicInfo.vendorID = lpAdapterInfo[i].iVendorID;
+                                size_t devIndex = adapterInfo.find(":") + 1;
+
+                                if (devIndex != std::string::npos)
+                                {
+                                    asicInfo.deviceIDString = adapterInfo.substr(devIndex, std::string::npos);
+                                    size_t colonPos = asicInfo.deviceIDString.find(":");
+
+                                    if (colonPos != std::string::npos)
+                                    {
+                                        asicInfo.deviceIDString = asicInfo.deviceIDString.substr(0, colonPos);
+                                        asicInfo.deviceID = atoi(asicInfo.deviceIDString.c_str());
+                                    }
+                                    else
+                                    {
+                                        asicInfo.deviceID = 0;
+                                    }
                                 }
                                 else
                                 {
                                     asicInfo.deviceID = 0;
                                 }
-                            }
-                            else
-                            {
-                                asicInfo.deviceID = 0;
-                            }
 
-                            // TODO: see if we can get revision id on Linux
-                            asicInfo.revID = 0;
+                                // TODO: see if we can get revision id on Linux
+                                asicInfo.revID = 0;
 #endif
 
-                            m_asicInfoList.push_back(asicInfo);
-                        }
+                                m_asicInfoList.push_back(asicInfo);
+                            }
 
-                        ADL_Main_Memory_Free(reinterpret_cast<void**>(&lpAdapterInfo));
-                    }
-                    else
-                    {
-                        m_asicInfoListRetVal = ADL_GET_ADAPTER_INFO_FAILED;
+                            ADL_Main_Memory_Free(reinterpret_cast<void**>(&lpAdapterInfo));
+                        }
+                        else
+                        {
+                            m_asicInfoListRetVal = ADL_GET_ADAPTER_INFO_FAILED;
+                        }
                     }
                 }
             }

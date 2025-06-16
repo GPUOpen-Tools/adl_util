@@ -1,16 +1,17 @@
 //==============================================================================
-// Copyright (c) 2011-2016 Advanced Micro Devices, Inc. All rights reserved.
-/// \author AMD Developer Tools Team
-/// \file
-/// \brief  Interface from Developer Tools to ADL.
+// Copyright (c) 2011-2025 Advanced Micro Devices, Inc. All rights reserved.
+/// @author AMD Developer Tools Team
+/// @file
+/// @brief  Interface from Developer Tools to ADL.
 //==============================================================================
-
-// TODO: Use DynamicLibraryModule for the dll/so interactions.
-// TODO: Consider moving ADLUtil into the DynamicLibraryModule directory.
 
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <string>
+#include <charconv>
+#include <cassert>
+#include <string_view>
 
 #include "ADLUtil.h"
 #ifdef _WIN32
@@ -36,47 +37,21 @@ void __stdcall ADL_Main_Memory_Free(void** lpBuffer)
     }
 }
 
-// converts a single hex character to its decimal equivalent
-char xtod(char c)
+// Converts a string to its decimal equivalent, the integer base is specified as a template argument
+template <int base>
+static int adl_from_chars(std::string_view str)
 {
-    if (c >= '0' && c <= '9')
+    int result{};
+    auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result, base);
+    if (ec == std::errc())
     {
-        return c - '0';
+        return result;
     }
-
-    if (c >= 'A' && c <= 'F')
-    {
-        return c - 'A' + 10;
-    }
-
-    if (c >= 'a' && c <= 'f')
-    {
-        return c - 'a' + 10;
-    }
-
-    return c = 0;      // not Hex digit
+    // Otherwise conversion failed
+    assert(false);
+    return 0;
 }
 
-// converts a string of hex characters to a decimal equivalent,
-// adding the decimal value to the supplied "initialValue"
-int HextoDec(const char* hex, int initalValue)
-{
-    if (*hex == 0)
-    {
-        return (initalValue);
-    }
-
-    return HextoDec(hex + 1, initalValue * 16 + xtod(*hex));
-}
-
-// Converts a hex string to its decimal equivalent
-int xtoi(const char* hex)
-{
-    return HextoDec(hex, 0);
-}
-
-
-//-----------------------------------------------------------------------------
 ADLUtil_Result ADLUtil_GetASICInfo(AsicInfoList& asicInfoList)
 {
     return AMDTADLUtils::Instance()->GetAsicInfoList(asicInfoList);
@@ -205,12 +180,6 @@ ADLUtil_Result AMDTADLUtils::Unload()
 
     Reset();
 
-    /// attempt to restore the default power mode, in case an app calls UseHighPowerMode() without a corresponding ResumeNormalPowerMode() call
-    if (0 != m_highPowerGpuSpeedSet.size())
-    {
-        ResumeNormalPowerMode();
-    }
-
     return result;
 }
 
@@ -229,7 +198,8 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
 
             int numAdapter = 0;
 
-            // Obtain the number of adapters for the system
+            // Obtain the number of logical adapters for the system
+            // EX: Even if you only have 2 physical GPUs you may logically have 10 adapters.
             if (nullptr != m_ADL2_Adapter_NumberOfAdapters_Get)
             {
                 adlResult = m_ADL2_Adapter_NumberOfAdapters_Get(m_adlContext, &numAdapter);
@@ -251,7 +221,7 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
 
                     if (nullptr == lpAdapterInfo)
                     {
-                        adlResult = ADL_GET_ADAPTER_INFO_FAILED;
+                        return ADLUtil_Result::ADL_GET_ADAPTER_INFO_FAILED;
                     }
                     else
                     {
@@ -271,8 +241,8 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
                         {
                             for (int i = 0; i < numAdapter; ++i)
                             {
-                                std::string adapterName = lpAdapterInfo[i].strAdapterName;
-                                std::string adapterInfo = lpAdapterInfo[i].strUDID;
+                                std::string_view adapterName = lpAdapterInfo[i].strAdapterName;
+                                std::string_view adapterInfo = lpAdapterInfo[i].strUDID;
 
                                 // trim trailing whitespace
                                 size_t lastNonSpace = adapterName.length() - 1;
@@ -284,27 +254,26 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
 
                                 ADLUtil_ASICInfo asicInfo;
                                 asicInfo.adapterName = adapterName.substr(0, lastNonSpace + 1);
-                                // TODO: find a way to get the correct gpu index in the system
                                 asicInfo.gpuIndex = 0;
 #ifdef _WIN32
                                 size_t vendorIndex = adapterInfo.find("PCI_VEN_") + strlen("PCI_VEN_");
                                 size_t devIndex = adapterInfo.find("&DEV_") + strlen("&DEV_");
                                 size_t revIndex = adapterInfo.find("&REV_") + strlen("&REV_");
 
-                                if (vendorIndex != std::string::npos)
+                                if (vendorIndex != std::string_view::npos)
                                 {
-                                    std::string vendorIDString = adapterInfo.substr(vendorIndex, 4);
-                                    asicInfo.vendorID = xtoi(vendorIDString.c_str());
+                                    std::string_view vendorIDString = adapterInfo.substr(vendorIndex, 4);
+                                    asicInfo.vendorID = adl_from_chars<16>(vendorIDString);
                                 }
                                 else
                                 {
                                     asicInfo.vendorID = 0;
                                 }
 
-                                if (devIndex != std::string::npos)
+                                if (devIndex != std::string_view::npos)
                                 {
                                     asicInfo.deviceIDString = adapterInfo.substr(devIndex, 4);
-                                    asicInfo.deviceID = xtoi(asicInfo.deviceIDString.c_str());
+                                    asicInfo.deviceID = adl_from_chars<16>(asicInfo.deviceIDString);
                                 }
                                 else
                                 {
@@ -312,10 +281,10 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
                                     asicInfo.deviceID = 0;
                                 }
 
-                                if (revIndex != std::string::npos)
+                                if (revIndex != std::string_view::npos)
                                 {
-                                    std::string revIDString = adapterInfo.substr(revIndex, 2);
-                                    asicInfo.revID = xtoi(revIDString.c_str());
+                                    std::string_view revIDString = adapterInfo.substr(revIndex, 2);
+                                    asicInfo.revID = adl_from_chars<16>(revIDString);
                                 }
                                 else
                                 {
@@ -328,15 +297,15 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
                                 asicInfo.vendorID = lpAdapterInfo[i].iVendorID;
                                 size_t devIndex = adapterInfo.find(":") + 1;
 
-                                if (devIndex != std::string::npos)
+                                if (devIndex != std::string_view::npos)
                                 {
-                                    asicInfo.deviceIDString = adapterInfo.substr(devIndex, std::string::npos);
+                                    asicInfo.deviceIDString = adapterInfo.substr(devIndex, std::string_view::npos);
                                     size_t colonPos = asicInfo.deviceIDString.find(":");
 
-                                    if (colonPos != std::string::npos)
+                                    if (colonPos != std::string_view::npos)
                                     {
                                         asicInfo.deviceIDString = asicInfo.deviceIDString.substr(0, colonPos);
-                                        asicInfo.deviceID = atoi(asicInfo.deviceIDString.c_str());
+                                        asicInfo.deviceID = adl_from_chars<10>(asicInfo.deviceIDString);
                                     }
                                     else
                                     {
@@ -348,7 +317,6 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
                                     asicInfo.deviceID = 0;
                                 }
 
-                                // TODO: see if we can get revision id on Linux
                                 asicInfo.revID = 0;
 #endif
 
@@ -383,7 +351,6 @@ ADLUtil_Result AMDTADLUtils::GetADLVersionsInfo(ADLVersionsInfo& adlVersionInfo)
         {
             int adlResult = ADL_OK;
 
-            // Obtain the number of adapters for the system
             if (nullptr != m_ADL2_Graphics_Versions_Get)
             {
                 adlResult = m_ADL2_Graphics_Versions_Get(m_adlContext, &m_adlVersionsInfo);
@@ -422,24 +389,22 @@ ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned i
 
     if (adlResult == ADL_SUCCESS || adlResult == ADL_WARNING)
     {
-        std::string strDriverVersion(driverVerInfo.strDriverVer);
+        std::string_view strDriverVersion(driverVerInfo.strDriverVer);
 
         // driver version looks like:  13.35.1005-140131a-167669E-ATI or 14.10-140115n-021649E-ATI, etc...
         // truncate at the first dash
-        strDriverVersion = strDriverVersion.substr(0, strDriverVersion.find("-", 0));
+        strDriverVersion = strDriverVersion.substr(0, strDriverVersion.find('-', 0));
 
-        size_t pos = 0;
-        std::string strToken;
-        std::string strDelimiter = ".";
-        std::stringstream ss;
+        constexpr char strDelimiter = '.';
 
         // parse the major driver version
-        pos = strDriverVersion.find(strDelimiter);
+        size_t pos = strDriverVersion.find(strDelimiter);
 
-        if (pos != std::string::npos)
+        if (pos != std::string_view::npos)
         {
-            strToken = strDriverVersion.substr(0, pos);
-            ss.str(strToken);
+            std::string_view strToken = strDriverVersion.substr(0, pos);
+            std::stringstream ss;
+            ss.str(strToken.data());
 
             if ((ss >> majorVer).fail())
             {
@@ -448,7 +413,7 @@ ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned i
             else
             {
                 adlResult = ADL_SUCCESS;
-                strDriverVersion.erase(0, pos + strDelimiter.length());
+                strDriverVersion.remove_prefix(pos + 1);
             }
 
             // parse the minor driver version
@@ -456,10 +421,10 @@ ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned i
 
             pos = strDriverVersion.find(strDelimiter);
 
-            if (pos != std::string::npos)
+            if (pos != std::string_view::npos)
             {
                 strToken = strDriverVersion.substr(0, pos);
-                strDriverVersion.erase(0, pos + strDelimiter.length());
+                strDriverVersion.remove_prefix(pos + 1);
                 subMinorAvailable = true;
             }
             else
@@ -468,7 +433,7 @@ ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned i
             }
 
             ss.clear();
-            ss.str(strToken);
+            ss.str(strToken.data());
 
             if ((ss >> minorVer).fail())
             {
@@ -480,10 +445,10 @@ ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned i
             {
                 pos = strDriverVersion.find(strDelimiter);
 
-                if (pos != std::string::npos)
+                if (pos != std::string_view::npos)
                 {
                     strToken = strDriverVersion.substr(0, pos);
-                    strDriverVersion.erase(0, pos + strDelimiter.length());
+                    strDriverVersion.remove_prefix(pos + 1);
                 }
                 else
                 {
@@ -491,7 +456,7 @@ ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned i
                 }
 
                 ss.clear();
-                ss.str(strToken);
+                ss.str(strToken.data());
 
                 if ((ss >> subMinorVer).fail())
                 {
@@ -502,153 +467,6 @@ ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned i
     }
 
     return adlResult;
-}
-
-ADLUtil_Result AMDTADLUtils::UseHighPowerMode(unsigned int gpuIndex)
-{
-    return ForceGPUClock(true, gpuIndex);
-}
-
-ADLUtil_Result AMDTADLUtils::ResumeNormalPowerMode(unsigned int gpuIndex)
-{
-    return ForceGPUClock(false, gpuIndex);
-}
-
-ADLUtil_Result AMDTADLUtils::ForceGPUClock(bool forceHigh, unsigned int gpuIndex)
-{
-    AsicInfoList asicInfoList;
-    ADLUtil_Result result = GetAsicInfoList(asicInfoList);
-    static const int AMD_VENDOR_ID = 0x1002;
-
-    if (ADL_SUCCESS == result)
-    {
-        std::lock_guard<std::mutex> lock(m_powerTableMutex);
-
-        int adlResult = ADL_OK;
-
-        for (AsicInfoList::iterator it = asicInfoList.begin(); it != asicInfoList.end(); ++it)
-        {
-            unsigned int thisGpuIndex = it->gpuIndex;
-            const int invalidIndex    = -1;
-
-            if ((static_cast<unsigned int>(invalidIndex) != gpuIndex && gpuIndex != thisGpuIndex) || AMD_VENDOR_ID != it->vendorID)
-            {
-                continue;
-            }
-
-            if (forceHigh)
-            {
-                if (m_highPowerGpuSpeedSet.find(thisGpuIndex) != m_highPowerGpuSpeedSet.end())
-                {
-                    continue; // this adapter has already been set to run in high power mode
-                }
-
-                ADLODParameters odParameters;
-
-                if (nullptr != m_ADL2_Overdrive5_ODParameters_Get)
-                {
-                    adlResult = m_ADL2_Overdrive5_ODParameters_Get(m_adlContext, thisGpuIndex, &odParameters);
-                }
-                else
-                {
-                    adlResult = m_ADL_Overdrive5_ODParameters_Get(thisGpuIndex, &odParameters);
-                }
-
-                if (ADL_OK > adlResult)
-                {
-                    // adl Error, skip this adapter
-                    continue;
-                }
-
-                int perfLevelSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * (odParameters.iNumberOfPerformanceLevels - 1);
-
-                if (0 < perfLevelSize)
-                {
-                    ADLODPerformanceLevels* odPerformanceLevels = reinterpret_cast<ADLODPerformanceLevels*>(malloc(perfLevelSize));
-
-                    odPerformanceLevels->iSize = perfLevelSize;
-
-                    if (nullptr != m_ADL2_Overdrive5_ODPerformanceLevels_Get)
-                    {
-                        adlResult = m_ADL2_Overdrive5_ODPerformanceLevels_Get(m_adlContext, thisGpuIndex, 0, odPerformanceLevels);
-                    }
-                    else
-                    {
-                        adlResult = m_ADL_Overdrive5_ODPerformanceLevels_Get(thisGpuIndex, 0, odPerformanceLevels);
-                    }
-
-                    if (ADL_OK <= adlResult)
-                    {
-                        ADLODPerformanceLevels* origODPerformanceLevels = reinterpret_cast<ADLODPerformanceLevels*>(malloc(perfLevelSize));
-                        memcpy(origODPerformanceLevels, odPerformanceLevels, odPerformanceLevels->iSize);
-                        m_origODPerformanceLevels[thisGpuIndex] = origODPerformanceLevels;
-
-                        int maxEngineClock = 0;
-                        int maxMemoryClock = 0;
-
-                        for (int i = 0; i < odParameters.iNumberOfPerformanceLevels; i++)
-                        {
-                            if (odPerformanceLevels->aLevels[i].iEngineClock > maxEngineClock)
-                            {
-                                maxEngineClock = odPerformanceLevels->aLevels[i].iEngineClock;
-                                maxMemoryClock = odPerformanceLevels->aLevels[i].iMemoryClock;
-                            }
-                        }
-
-                        for (int i = 0; i < odParameters.iNumberOfPerformanceLevels; i++)
-                        {
-                            odPerformanceLevels->aLevels[i].iEngineClock = maxEngineClock;
-                            odPerformanceLevels->aLevels[i].iMemoryClock = maxMemoryClock;
-                        }
-
-                        if (nullptr != m_ADL2_Overdrive5_ODPerformanceLevels_Set)
-                        {
-                            adlResult = m_ADL2_Overdrive5_ODPerformanceLevels_Set(m_adlContext, thisGpuIndex, odPerformanceLevels);
-                        }
-                        else
-                        {
-                            adlResult = m_ADL_Overdrive5_ODPerformanceLevels_Set(thisGpuIndex, odPerformanceLevels);
-                        }
-
-                        if (ADL_OK <= adlResult)
-                        {
-                            m_highPowerGpuSpeedSet.insert(thisGpuIndex);
-                        }
-                    }
-
-                    free(odPerformanceLevels);
-                }
-            }
-            else // reset to default power mode
-            {
-                if (m_highPowerGpuSpeedSet.find(thisGpuIndex) == m_highPowerGpuSpeedSet.end())
-                {
-                    continue; // this adapter already been set to run in default power mode
-                }
-
-                m_highPowerGpuSpeedSet.erase(thisGpuIndex);
-
-                if (nullptr != m_ADL2_Overdrive5_ODPerformanceLevels_Set)
-                {
-                    adlResult = m_ADL2_Overdrive5_ODPerformanceLevels_Set(m_adlContext, thisGpuIndex, m_origODPerformanceLevels[thisGpuIndex]);
-                }
-                else
-                {
-                    adlResult = m_ADL_Overdrive5_ODPerformanceLevels_Set(thisGpuIndex, m_origODPerformanceLevels[thisGpuIndex]);
-                }
-
-                free(m_origODPerformanceLevels[thisGpuIndex]);
-                m_origODPerformanceLevels.erase(thisGpuIndex);
-            }
-        }
-
-        if (ADL_OK > adlResult)
-        {
-            result = ADL_CHANGING_POWER_MODE_FAILED;
-        }
-    }
-
-    return result;
 }
 
 void AMDTADLUtils::Reset()

@@ -1,5 +1,5 @@
-## Copyright (c) 2018 Advanced Micro Devices, Inc. All rights reserved.
-cmake_minimum_required(VERSION 3.5.1)
+## Copyright (c) 2018-2025 Advanced Micro Devices, Inc. All rights reserved.
+cmake_minimum_required(VERSION 3.10)
 
 ## Define ADL Util directory
 set(ADL_UTIL_DIR ${COMMON_DIR}/Src/ADLUtil)

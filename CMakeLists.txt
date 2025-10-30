@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 3.25)
 
 project(ADL_UTIL LANGUAGES CXX)
 
+if (NOT WIN32)
+    message(FATAL_ERROR "ADL and adl_util only support Windows!")
+endif()
+
 add_library(adl_util STATIC)
 add_library(AMD::adl_util ALIAS adl_util)
 target_sources(adl_util

@@ -14,11 +14,8 @@
 #include <string_view>
 
 #include "ADLUtil.h"
-#ifdef _WIN32
-    #include <windows.h>
-#elif defined(_LINUX)
-    #include <dlfcn.h>
-#endif
+
+#include <Windows.h>
 
 // Callback so that ADL can allocate memory
 void* __stdcall ADL_Main_Memory_Alloc(int iSize)
@@ -87,18 +84,12 @@ ADLUtil_Result AMDTADLUtils::LoadAndInit()
 
     if (nullptr == m_libHandle)
     {
-#ifdef _WIN32
+#ifdef _WIN64
+        // 64 bit Windows library
         m_libHandle = LoadLibraryA("atiadlxx.dll");
-
-        if (nullptr == m_libHandle)
-        {
-            // A 32 bit calling application on 64 bit OS will fail to LoadLIbrary.
-            // Try to load the 32 bit library (atiadlxy.dll) instead
-            m_libHandle = LoadLibraryA("atiadlxy.dll");
-        }
-
-#else
-        m_libHandle = dlopen("libatiadlxx.so", RTLD_LAZY | RTLD_GLOBAL);
+#elif defined(_WIN32)
+        // 32 bit Windows library
+        m_libHandle = LoadLibraryA("atiadlxy.dll");
 #endif
 
         if (nullptr == m_libHandle)
@@ -106,20 +97,15 @@ ADLUtil_Result AMDTADLUtils::LoadAndInit()
             result = ADL_NOT_FOUND;
         }
 
-#ifdef _WIN32
-#define LOCAL_GET_PROC_ADDRESS ::GetProcAddress
-#else
-#define LOCAL_GET_PROC_ADDRESS dlsym
-#endif
-#define X(SYM) m_##SYM = (SYM##_fn)LOCAL_GET_PROC_ADDRESS(m_libHandle, #SYM); \
-    if (nullptr == m_##SYM) \
-    { \
-        Unload(); \
-        result = ADL_MISSING_ENTRYPOINTS; \
+#define X(SYM)                                               \
+    m_##SYM = (SYM##_fn)::GetProcAddress(m_libHandle, #SYM); \
+    if (nullptr == m_##SYM)                                  \
+    {                                                        \
+        Unload();                                            \
+        result = ADL_MISSING_ENTRYPOINTS;                    \
     }
         ADL_INTERFACE_TABLE;
 #undef X
-#undef LOCAL_GET_PROC_ADDRESS
 
         if (ADL_SUCCESS == result)
         {
@@ -166,11 +152,7 @@ ADLUtil_Result AMDTADLUtils::Unload()
             m_ADL_Main_Control_Destroy();
         }
 
-#ifdef _WIN32
         FreeLibrary(m_libHandle);
-#else
-        dlclose(m_libHandle);
-#endif
         m_libHandle = nullptr;
 
 #define X(SYM) m_##SYM = nullptr;
@@ -255,7 +237,7 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
                                 ADLUtil_ASICInfo asicInfo;
                                 asicInfo.adapterName = adapterName.substr(0, lastNonSpace + 1);
                                 asicInfo.gpuIndex = 0;
-#ifdef _WIN32
+
                                 size_t vendorIndex = adapterInfo.find("PCI_VEN_") + strlen("PCI_VEN_");
                                 size_t devIndex = adapterInfo.find("&DEV_") + strlen("&DEV_");
                                 size_t revIndex = adapterInfo.find("&REV_") + strlen("&REV_");
@@ -293,32 +275,6 @@ ADLUtil_Result AMDTADLUtils::GetAsicInfoList(AsicInfoList& asicInfoList)
 
                                 asicInfo.registryPath = lpAdapterInfo[i].strDriverPath;
                                 asicInfo.registryPathExt = lpAdapterInfo[i].strDriverPathExt;
-#elif defined(_LINUX)
-                                asicInfo.vendorID = lpAdapterInfo[i].iVendorID;
-                                size_t devIndex = adapterInfo.find(":") + 1;
-
-                                if (devIndex != std::string_view::npos)
-                                {
-                                    asicInfo.deviceIDString = adapterInfo.substr(devIndex, std::string_view::npos);
-                                    size_t colonPos = asicInfo.deviceIDString.find(":");
-
-                                    if (colonPos != std::string_view::npos)
-                                    {
-                                        asicInfo.deviceIDString = asicInfo.deviceIDString.substr(0, colonPos);
-                                        asicInfo.deviceID = adl_from_chars<10>(asicInfo.deviceIDString);
-                                    }
-                                    else
-                                    {
-                                        asicInfo.deviceID = 0;
-                                    }
-                                }
-                                else
-                                {
-                                    asicInfo.deviceID = 0;
-                                }
-
-                                asicInfo.revID = 0;
-#endif
 
                                 m_asicInfoList.push_back(asicInfo);
                             }
@@ -387,7 +343,7 @@ ADLUtil_Result AMDTADLUtils::GetDriverVersion(unsigned int& majorVer, unsigned i
     ADLVersionsInfo driverVerInfo;
     ADLUtil_Result adlResult = AMDTADLUtils::Instance()->GetADLVersionsInfo(driverVerInfo);
 
-    if (adlResult == ADL_SUCCESS || adlResult == ADL_WARNING)
+    if (adlResult == ADL_SUCCESS)
     {
         std::string_view strDriverVersion(driverVerInfo.strDriverVer);
 

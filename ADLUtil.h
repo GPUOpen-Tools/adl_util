@@ -8,12 +8,6 @@
 #ifndef _ADL_UTIL_H_
 #define _ADL_UTIL_H_
 
-#ifdef _LINUX
-    #ifndef LINUX
-        #define LINUX
-    #endif
-#endif
-
 #include <mutex>
 #include <string>
 #include <vector>
@@ -21,16 +15,7 @@
 #include "adl_sdk.h"
 #include "TSingleton.h"
 
-#ifdef __GNUC__
-    #define ADLUTIL_DEPRECATED __attribute__((deprecated))
-    typedef void* ADLModule;
-#elif _WIN32
-    #include <windows.h>
-    #define ADLUTIL_DEPRECATED __declspec(deprecated)
-    typedef HINSTANCE ADLModule;
-#else
-    #define ADLUTIL_DEPRECATED
-#endif
+#include <Windows.h>
 
 /// Stores ASIC information that is parsed from data supplied by ADL
 struct ADLUtil_ASICInfo
@@ -41,10 +26,8 @@ struct ADLUtil_ASICInfo
     int deviceID;                 ///< the device ID (hex value stored as int)
     int revID;                    ///< the revision ID (hex value stored as int)
     unsigned int gpuIndex;        ///< GPU index in the system
-#ifdef _WIN32
     std::string registryPath;     ///< Adapter registry path
     std::string registryPathExt;  ///< Adapter registry path
-#endif // _WIN32
 };
 
 typedef std::vector<ADLUtil_ASICInfo> AsicInfoList;
@@ -66,12 +49,12 @@ enum ADLUtil_Result
 /// Uses ADL to obtain information about the available ASICs. This is deprecated -- use AMDTADLUtils::Instance()->GetAsicInfoList() instead.
 /// @param   asicInfoList A list to populate with the available ASICs.
 /// @returns              an enum ADLUtil_Result status code.
-ADLUTIL_DEPRECATED ADLUtil_Result ADLUtil_GetASICInfo(AsicInfoList& asicInfoList);
+[[deprecated]] ADLUtil_Result ADLUtil_GetASICInfo(AsicInfoList &asicInfoList);
 
 /// Uses ADL to obtain version information about installed drivers. This is deprecated -- use AMDTADLUtils::Instance()->GetADLVersionsInfo() instead
 /// @param   info The version information.
 /// @returns      an enum ADLUtil_Result status code.
-ADLUTIL_DEPRECATED ADLUtil_Result ADLUtil_GetVersionsInfo(struct ADLVersionsInfo& info);
+[[deprecated]] ADLUtil_Result ADLUtil_GetVersionsInfo(struct ADLVersionsInfo &info);
 
 // Typedefs of the ADL function pointers. If additional entry points are needed, add them here
 typedef int(*ADL_Main_Control_Create_fn)(ADL_MAIN_MALLOC_CALLBACK, int);
@@ -145,7 +128,7 @@ private:
     /// destructor
     ~AMDTADLUtils();
 
-    ADLModule          m_libHandle;          ///< Handle to ADL Module
+    HINSTANCE          m_libHandle;          ///< Handle to ADL Module
     ADL_CONTEXT_HANDLE m_adlContext;         ///< ADL Context for use with ADL2 functions
     std::mutex         m_asicInfoMutex;      ///< Mutex to protect access to the m_asicInfoList
     std::mutex         m_adlVersionsMutex;   ///< Mutex to protect access to the m_adlVersionsInfo

@@ -1,4 +1,4 @@
-## Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 cmake_minimum_required(VERSION 3.25)
 
 project(ADL_UTIL LANGUAGES CXX)
@@ -6,6 +6,8 @@ project(ADL_UTIL LANGUAGES CXX)
 if (NOT WIN32)
     message(FATAL_ERROR "ADL and adl_util only support Windows!")
 endif()
+
+message(WARNING "adl_util has been deprecated and will not receive more updates!")
 
 add_library(adl_util STATIC)
 add_library(AMD::adl_util ALIAS adl_util)
